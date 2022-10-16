@@ -1,16 +1,10 @@
 #!/usr/bin/env python3 
 
-
 import argparse
 import csv, json
 import stat, sys
 from typing import Iterable, List 
 import os, shutil, getpass, enum, subprocess, time 
-
-
-## TODO - set correct group when creating files
-
-
 
 
 class InputItem:
@@ -638,7 +632,8 @@ class Batcher:
             os.path.join( outfolder, self.Filenames.PARAMS.value ) )
 
         ## iterate over run parameters of different configurations (target feature, classes to predict)
-        bash_lines = list()   
+        biodocker_to_run = list() 
+
         for cmp in self.__bmanager:
 
             pos_labels, neg_labels = [ 
@@ -655,20 +650,27 @@ class Batcher:
                 outfolder = session_folder #os.path.join( outfolder, session_folder )
             )
 
-            bash_lines.extend([
-                f"\n# TARGET = {cmp.feature}\t- {pos_labels} vs {neg_labels}\n\n",
-                f"{biodocker_path} docker --container_name {container_name} {self.__params.format_params( curr )}\n"
-            ])
-
+            cmp_name = f"# TARGET of CLASSIFICATION => {cmp.feature}\t- {pos_labels} vs {neg_labels}\n\n"
+            biodocker_call = f"{biodocker_path} docker --container_name {container_name} {self.__params.format_params( curr )}"
+            biodocker_to_run.append( ( cmp_name, biodocker_call ) )
 
         bashfilename = os.path.join( outfolder, self.Filenames.BASH_SCRIPT.value )
 
         with open( bashfilename, "w" ) as fbash:
-            fbash.write("#!/bin/bash\n")
-            fbash.writelines( bash_lines )
+            fbash.write("#!/bin/bash\n\n")
+            # fbash.writelines( bash_lines )
+
+            for cmp_name, biodocker_call in biodocker_to_run:
+                fbash.write( cmp_name )
+                fbash.write( biodocker_call )
+                fbash.write("\n\n")
 
         fstats = os.stat( bashfilename )
         os.chmod( bashfilename, fstats.st_mode | stat.S_IEXEC )
+
+        for name, b2r in biodocker_to_run:
+            print(f"\nRunning {name}: ")
+            subprocess.run( b2r, shell = True, check = True, cwd = outfolder )
 
 
     @classmethod
@@ -698,6 +700,11 @@ class Batcher:
 
 
 
+class MainCommand( enum.Enum ):
+    BATCH = "batch"
+    DOCKER = "docker"
+
+
 
 
 if __name__ == "__main__":
@@ -705,7 +712,9 @@ if __name__ == "__main__":
 
     subparsers = parser.add_subparsers(help='Run a single analysis using docker or a batch on them?', dest="mode")
     # create the parser to run analyses using docker
-    parser_docker = subparsers.add_parser('docker', help='Run a dockerized analysis')
+    parser_docker = subparsers.add_parser(
+        MainCommand.DOCKER.value, 
+        help='Run a dockerized analysis')
 
     ## docker options 
     parser_docker.add_argument("--verbose", action="store_true", help="Show docker logs while running")
@@ -715,13 +724,16 @@ if __name__ == "__main__":
     parser_docker = ParserFeatSEE.get_parser( parser_docker )
 
     # create the parser to prepare a batch of analyses
-    parser_batcher = subparsers.add_parser('batch', help='Run a batch of dockerized analyses')
+    parser_batcher = subparsers.add_parser(
+        MainCommand.BATCH.value, 
+        help='Run a batch of dockerized analyses')
+        
     Batcher.get_parser( parser_batcher )
     
     args = parser.parse_args()
     
     
-    if args.mode == "docker":
+    if args.mode == MainCommand.DOCKER.value:
         featsee = FeatSEECore( parser )
 
         args = featsee.get_args() 
@@ -732,7 +744,7 @@ if __name__ == "__main__":
         featsee.mount_files()
         featsee.run_container( args.verbose )
     
-    elif args.mode == "batch":
+    elif args.mode == MainCommand.BATCH.value:
         batcher = Batcher(args)
 
 
@@ -744,22 +756,4 @@ if __name__ == "__main__":
 
         else:
             parser.print_help()
-
-
-    # ## docker options 
-    # parser.add_argument("--verbose", action="store_true", help="Show docker logs while running")
-    # parser.add_argument("--tag", type=str, help="Docker image tag")
-    # parser.add_argument("--container_name", type=str, required=False, help="Docker container name")
-
-    # parser = ParserFeatSEE.get_parser( parser )
-
-    # featsee = FeatSEECore( parser )
-
-    # args = featsee.get_args() 
-
-    # featsee.image_tag = args.tag
-    # featsee.container_name = args.container_name
-
-    # featsee.mount_files()
-    # featsee.run_container( args.verbose )
 
