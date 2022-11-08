@@ -300,7 +300,7 @@ class Parser:
         parser.add_argument("--min_nf", type=int, default=1, help="Minimum number of features to be selected")
         parser.add_argument("--max_nf", type=int, help="Maximum number of features to be selected")
         parser.add_argument("--min_auc", type=float, required=False, default=0.8, help="Minimum AUC to be considered")
-        parser.add_argument("--score", type=str, default="pearson")
+        # parser.add_argument("--score", type=str, default="pearson")
 
         parser.add_argument("--ntrials_test", type=int, default=3, help="Number of trials during feature evaluation phase")
         parser.add_argument("--ncv_test", type=int, default=10, help="Number of cross-validation folds during feature evaluation phase")
@@ -325,7 +325,7 @@ class Parser:
         parser.add_argument("--nga", type=int, default=10, help="Number of genetic algorithms to be run")
         parser.add_argument("--ngen", type=int, default=50, help="Number of generations for a genetic algorithm run")
         parser.add_argument("--popsize", type=int, default=30, help="Population size for a genetic algorithm run")
-        parser.add_argument("--score", type=str, default="pearson", help="Score to be used for feature selection (e.g. pearson, anova)")
+        # parser.add_argument("--score", type=str, default="pearson", help="Score to be used for feature selection (e.g. pearson, anova)")
 
 
     
@@ -366,7 +366,7 @@ class Parser:
         parser.add_argument("--ncv", type=int, default=10, help="Number of folds during cross-validation")                      #number of folds to be used during cross validation 
         parser.add_argument("--tsize", type=float, required=False, default=0, help="Proportion of the input dataset to be used as test set")   #dataset proportion to be used as test set 
         ######################
-        parser.add_argument("--estimators", type=str, nargs="+", default=["knn"], help="List of estimator to be used during feature evaluation")          #list of estimators to be used
+        parser.add_argument("--estimators", type=str, nargs="+", default=["ALL"], help="List of estimator to be used during feature evaluation")          #list of estimators to be used
 
 
 
@@ -519,7 +519,6 @@ class Batcher:
                 l = [ f"--{k} {unroll_list( v )}" for k, v in d.items() if v ]
                 return " ".join(l)
 
-
             general = unpack_dict( self.__format_general_params() )
             specific = unpack_dict( self.__specific )
             cmp = unpack_dict( cmp_params )
@@ -565,7 +564,7 @@ class Batcher:
                 n_trials = 10, 
                 n_folds = 10, 
                 test_size = 0.3, 
-                estimators = "*"
+                estimators = "ALL"
             )
 
         def to_json(self, filename):
