@@ -325,6 +325,7 @@ class Parser:
         parser.add_argument("--nga", type=int, default=10, help="Number of genetic algorithms to be run")
         parser.add_argument("--ngen", type=int, default=50, help="Number of generations for a genetic algorithm run")
         parser.add_argument("--popsize", type=int, default=30, help="Population size for a genetic algorithm run")
+        parser.add_argument("--loo", action="store_true")
         # parser.add_argument("--score", type=str, default="pearson", help="Score to be used for feature selection (e.g. pearson, anova)")
 
 
