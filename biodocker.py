@@ -327,6 +327,7 @@ class Parser:
         parser.add_argument("--popsize", type=int, default=100, help="Population size for a genetic algorithm run")
         parser.add_argument("--loo", action="store_true")
         # parser.add_argument("--score", type=str, default="pearson", help="Score to be used for feature selection (e.g. pearson, anova)")
+        parser.add_argument("--max_nf", type=int, help="Maximum number of features to be selected")
 
 
     
@@ -546,7 +547,8 @@ class Batcher:
                     ngen = 50,
                     nga = 10,
                     popsize = 30, 
-                    score = "pearson"
+                    max_nf = None
+                    # score = "pearson"
                 )
 
 
