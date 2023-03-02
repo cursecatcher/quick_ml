@@ -3,8 +3,175 @@
 import argparse
 import csv, json
 import stat, sys
-from typing import Iterable, List 
+from typing import Dict, Iterable, List 
 import os, shutil, getpass, enum, subprocess, time 
+
+
+
+class ArgparseParameterNames( enum.Enum ):
+    # I/O & GENERIC STUFF
+    INPUT_DATASET = "input_data"
+    OUTPUT_FOLDER = "outfolder"
+    TEST_SETS = "test_sets"
+    FEATURE_SETS = "feature_lists"
+    RULES_SETS = "rules"
+    ESTIMATORS = "estimators"
+    TRAINED_MODELS = "load_from"
+
+    TSET_PROPORTION = "tsize"
+    TARGET_FEATURE = "target"
+    TARGET_POS_LABELS = "pos_labels"
+    TARGET_NEG_LABELS = "neg_labels"
+    
+    # EVALUATION
+    EV_LOO = "loo"
+    EV_NCV = "ncv"
+    EV_NTRIALS = "trials"
+    # FEATURE SELECTION
+    FS_MIN_NF = "min_nf"
+    FS_MAX_NF = "max_nf"
+    FS_MIN_AUC = "min_auc"
+    FS_NTEST_EVAL = "ntrials_test"
+    FS_NCV_EVAL = "ncv_test"
+    # EXPLANATION 
+    EX_RULES_FILES = "rules"
+    EX_NCLUSTERS = "clusters"
+    EX_MAX_NRULES = "max_rules"
+    EX_MIN_NRULES = "min_rules"
+    EX_NTEST_EVAL = FS_NTEST_EVAL
+    EX_NCV_EVAL = FS_NCV_EVAL
+    EX_LOO = EV_LOO
+    # GENETIC SELECTION
+    GA_EDGE_THRESHOLD = "edge_threshold"
+    GA_NRUNS = "nga"
+    GA_NGEN = "ngen"
+    GA_POPSIZE = "popsize"
+    GA_MAX_NF = FS_MAX_NF
+    # TUNING
+    TU_TRAINED_MODELS = TRAINED_MODELS
+    TU_EXHAUSTIVE_SEARCH = "exhaustive"
+
+
+    @classmethod
+    def get_argvalue(cls, d: Dict, k):
+        """ """
+        return d.get( k.value )
+
+    @classmethod
+    def build_dict_args(cls, d: Dict, keys: List) -> Dict:
+        return { k.value: cls.get_argvalue( d, k ) for k in keys }
+
+    @classmethod
+    def build_list_args(cls, d: Dict, keys: List) -> List:
+        return [ cls.get_argvalue( d, k ) for k in keys ]
+
+    @classmethod
+    def replace_keys(cls, d: Dict) -> Dict:
+        return { k.value: v for k, v in d.items() }
+
+
+
+
+def get_opt( item: ArgparseParameterNames ):
+    return f"--{item.value}"
+
+
+class Parser:
+    """ Auxiliary methods to parse command line arguments """
+
+
+    @classmethod
+    def set_evaluation_parameters(cls, parser: argparse.ArgumentParser):
+        # cls.get_standard_parser( parser )
+        parser.add_argument( get_opt( ArgparseParameterNames.EV_LOO ), action="store_true", help="Enable leave-one-out cross-validation")
+
+    @classmethod
+    def set_fselection_parameters(cls, parser: argparse.ArgumentParser):
+        # cls.get_standard_parser( parser ) 
+        parser.add_argument( get_opt( ArgparseParameterNames.FS_MIN_NF ), type=int, default=1, help="Minimum number of features to be selected")
+        parser.add_argument( get_opt( ArgparseParameterNames.FS_MAX_NF ), type=int, help="Maximum number of features to be selected")
+        parser.add_argument( get_opt( ArgparseParameterNames.FS_MIN_AUC ), type=float, required=False, default=0.8, help="Minimum AUC to be considered")
+        
+        parser.add_argument( get_opt( ArgparseParameterNames.FS_NTEST_EVAL ), type=int, default=3, help="Number of trials during feature evaluation phase")
+        parser.add_argument( get_opt( ArgparseParameterNames.FS_NCV_EVAL ), type=int, default=10, help="Number of cross-validation folds during feature evaluation phase")
+
+
+    @classmethod
+    def set_explaination_parameters(cls, parser: argparse.ArgumentParser):
+        # cls.get_standard_parser( parser )
+        parser.add_argument("-r", get_opt( ArgparseParameterNames.EX_RULES_FILES ), type=str, nargs="*")
+        parser.add_argument("-c", get_opt( ArgparseParameterNames.EX_NCLUSTERS ), type=int, default=3)
+        parser.add_argument( get_opt( ArgparseParameterNames.EX_NTEST_EVAL ), type=int, default=3)
+        parser.add_argument( get_opt( ArgparseParameterNames.EX_NCV_EVAL ), type=int, default=10)
+        parser.add_argument( get_opt( ArgparseParameterNames.EX_LOO ), action="store_true")
+        parser.add_argument( get_opt( ArgparseParameterNames.EX_MAX_NRULES ), type=int, required=False, default=20)
+        parser.add_argument( get_opt( ArgparseParameterNames.EX_MIN_NRULES ), type=int, required=False, default=2)
+        
+
+    @classmethod
+    def set_ga_parameters(cls, parser: argparse.ArgumentParser):
+        # cls.get_standard_parser( parser )
+        parser.add_argument( get_opt( ArgparseParameterNames.GA_EDGE_THRESHOLD ), type=float, default=0.5, help="Correlation threshold value for creating ad edge in the graph ")
+        parser.add_argument( get_opt( ArgparseParameterNames.GA_NRUNS ), type=int, default=10, help="Number of genetic algorithms to be run")
+        parser.add_argument( get_opt( ArgparseParameterNames.GA_NGEN ), type=int, default=1000, help="Number of generations for a genetic algorithm run")
+        parser.add_argument( get_opt( ArgparseParameterNames.GA_POPSIZE ), type=int, default=100, help="Population size for a genetic algorithm run")
+        parser.add_argument( get_opt( ArgparseParameterNames.EV_LOO ), action="store_true")
+        # parser.add_argument("--score", type=str, default="pearson", help="Score to be used for feature selection (e.g. pearson, anova)")
+        parser.add_argument( get_opt( ArgparseParameterNames.GA_MAX_NF ), type=int, help="Maximum number of features to be selected")
+
+
+    
+    @classmethod
+    def set_tuning_parameters(cls, parser: argparse.ArgumentParser):
+        # cls.get_standard_parser( parser )
+        parser.add_argument( get_opt( ArgparseParameterNames.TU_TRAINED_MODELS ), type=str, required=False)
+        parser.add_argument( get_opt( ArgparseParameterNames.TU_EXHAUSTIVE_SEARCH ), action="store_true", help="Exhaustive search for hyperparameters")
+    
+
+
+    @classmethod
+    def get_standard_parser(cls, parser: argparse.ArgumentParser, estimators: List[str] = None):
+        cls.__set_io_parameters( parser ) 
+        cls.__set_cmp_parameters( parser )
+        cls.__set_run_parameters( parser, estimators )
+
+    @classmethod
+    def __set_io_parameters(cls, parser: argparse.ArgumentParser):
+        ### Output folders
+        parser.add_argument("-o", f"--{FeatSEECore.ParserParameters.output_folder()}", type=str, required=True, help="The output folder (may not exist)")       #output folder (may not exist)
+        ### Input files
+        parser.add_argument("-i", f"--{FeatSEECore.ParserParameters.input_dataset()}", type=str, nargs="+", help="Input dataset to be used as training (and test) set")      #input dataset 
+        parser.add_argument("-v", f"--{FeatSEECore.ParserParameters.test_sets()}", type=str, nargs="*", default=list(), help="List of dataset to be used as test sets")     #list of test sets 
+        parser.add_argument("-f", f"--{FeatSEECore.ParserParameters.feature_sets()}", type=str, nargs="+", default=list(), help="List of features sets to be considered")       #list of feature lists 
+
+    @classmethod
+    def __set_cmp_parameters(cls, parser: argparse.ArgumentParser):
+        parser.add_argument("-t", get_opt( ArgparseParameterNames.TARGET_FEATURE ), type=str, required=True, help="Name of the categorical feature to be set as target")          #name of the (categorical) feature to be predicted 
+        parser.add_argument("-p", get_opt( ArgparseParameterNames.TARGET_POS_LABELS ), type=str, nargs="+", help="Values of the target feature to be considered as positive examples")          #labels to be considered as positive     
+        parser.add_argument("-n", get_opt( ArgparseParameterNames.TARGET_NEG_LABELS ), type=str, nargs="+", help="Values of the target feature to be considered as negative examples")          #labels to be considered as negative
+
+
+    @classmethod
+    def __set_run_parameters(cls, parser: argparse.ArgumentParser, estimators: List[str] = None):
+        ###################### 
+        parser.add_argument( get_opt( ArgparseParameterNames.EV_NTRIALS ), type=int, default=2, help="How many times to repeat the cross-validation procedure")                    #num of runs to be done 
+        parser.add_argument( get_opt( ArgparseParameterNames.EV_NCV ), type=int, default=10, help="Number of folds during cross-validation")                      #number of folds to be used during cross validation 
+        parser.add_argument( get_opt( ArgparseParameterNames.TSET_PROPORTION ), type=float, required=False, default=0, help="Proportion of the input dataset to be used as test set")   #dataset proportion to be used as test set 
+        ######################
+        estimator_helper = "List of estimator to be used during feature evaluation."
+        default_estimators = [ "ALL" ]
+
+        if estimators is not None: 
+            default_estimators = estimators
+            estimator_helper += f" Available ones: {', '.join( estimators )}"
+        
+        parser.add_argument( 
+            get_opt( ArgparseParameterNames.ESTIMATORS), 
+            type=str, nargs="+", 
+            default = default_estimators, 
+            help = estimator_helper )          #list of estimators to be used
+
+
 
 
 class InputItem:
@@ -78,28 +245,37 @@ class FeatSEECore:
     class ParserParameters:
         @classmethod
         def input_dataset(cls):
-            return "input_data"
+            return ArgparseParameterNames.INPUT_DATASET.value
         
         @classmethod
         def output_folder(cls):
-            return "outfolder"
+            return ArgparseParameterNames.OUTPUT_FOLDER.value
 
         @classmethod
         def test_sets(cls):
-            return "test_sets"
+            return ArgparseParameterNames.TEST_SETS.value
         
         @classmethod
         def feature_sets(cls):
-            return "feature_lists"
+            return ArgparseParameterNames.FEATURE_SETS.value
 
         @classmethod
         def rules_sets(cls):
-            return "rules"
+            return ArgparseParameterNames.RULES_SETS.value
 
         @classmethod
         def trained_models(cls):
-            return "load_from" ## load_models ? 
+            return ArgparseParameterNames.TRAINED_MODELS.value
             # return "trained_models"
+
+
+    class CommandHelper( enum.Enum ):
+        EVALUATION = "Evaluate 1+ sets of features"
+        EXPLANATION = "Explain the features of a trained model"
+        SELECTION = "Select features from a training set"
+        GA_SELECTION = "Run a genetic algorithm to perform feature selection"
+        TUNING = "Tune the parameters of 1+ model(s)"
+        EDA = "Perform exploratory data analysis on the provided dataset"
 
 
     class SupportedAction(enum.Enum):
@@ -108,6 +284,7 @@ class FeatSEECore:
         EXPLAINATION = "explain"
         GA_SELECTION = "GA" 
         TUNING = "tune"     
+        EDA = "EDA"
 
         @classmethod
         def from_command(cls, command: str):
@@ -284,123 +461,34 @@ class FeatSEECore:
 
 
 
-class Parser:
-    """ Auxiliary methods to parse command line arguments """
-
-    @classmethod
-    def set_evaluation_parameters(cls, parser: argparse.ArgumentParser):
-        cls.get_standard_parser( parser )
-
-        parser.add_argument("--loo", action="store_true", help="Enable leave-one-out cross-validation")
-
-    @classmethod
-    def set_fselection_parameters(cls, parser: argparse.ArgumentParser):
-        cls.get_standard_parser( parser ) 
-
-        parser.add_argument("--min_nf", type=int, default=1, help="Minimum number of features to be selected")
-        parser.add_argument("--max_nf", type=int, help="Maximum number of features to be selected")
-        parser.add_argument("--min_auc", type=float, required=False, default=0.8, help="Minimum AUC to be considered")
-        # parser.add_argument("--score", type=str, default="pearson")
-
-        parser.add_argument("--ntrials_test", type=int, default=3, help="Number of trials during feature evaluation phase")
-        parser.add_argument("--ncv_test", type=int, default=10, help="Number of cross-validation folds during feature evaluation phase")
-
-
-    @classmethod
-    def set_explaination_parameters(cls, parser: argparse.ArgumentParser):
-        cls.get_standard_parser( parser )
-
-        parser.add_argument("-r", "--rules", type=str, nargs="*")
-        parser.add_argument("-c", "--clusters", type=int, default=3)
-        parser.add_argument("--ntrials_test", type=int, default=3)
-        parser.add_argument("--ncv_test", type=int, default=10)
-        parser.add_argument("--loo", action="store_true")
-        parser.add_argument("--max_rules", type=int, required=False)
-
-    @classmethod
-    def set_ga_parameters(cls, parser: argparse.ArgumentParser):
-        cls.get_standard_parser( parser )
-
-        parser.add_argument("--edge_threshold", type=float, default=0.5, help="Correlation threshold value for creating ad edge in the graph ")
-        parser.add_argument("--nga", type=int, default=10, help="Number of genetic algorithms to be run")
-        parser.add_argument("--ngen", type=int, default=1000, help="Number of generations for a genetic algorithm run")
-        parser.add_argument("--popsize", type=int, default=100, help="Population size for a genetic algorithm run")
-        parser.add_argument("--loo", action="store_true")
-        # parser.add_argument("--score", type=str, default="pearson", help="Score to be used for feature selection (e.g. pearson, anova)")
-        parser.add_argument("--max_nf", type=int, help="Maximum number of features to be selected")
-
-
-    
-    @classmethod
-    def set_tuning_parameters(cls, parser: argparse.ArgumentParser):
-        cls.get_standard_parser( parser )
-        parser.add_argument("--load_from", type=str, required=False)
-        parser.add_argument("--exhaustive", action="store_true", help="Exhaustive search for hyperparameters")
-    
-
-
-    @classmethod
-    def get_standard_parser(cls, parser: argparse.ArgumentParser):
-        cls.__set_io_parameters( parser ) 
-        cls.__set_cmp_parameters( parser )
-        cls.__set_run_parameters( parser )
-
-    @classmethod
-    def __set_io_parameters(cls, parser: argparse.ArgumentParser):
-        ### Output folders
-        parser.add_argument("-o", f"--{FeatSEECore.ParserParameters.output_folder()}", type=str, required=True, help="The output folder (may not exist)")       #output folder (may not exist)
-        ### Input files
-        parser.add_argument("-i", f"--{FeatSEECore.ParserParameters.input_dataset()}", type=str, nargs="+", help="Input dataset to be used as training (and test) set")      #input dataset 
-        parser.add_argument("-v", f"--{FeatSEECore.ParserParameters.test_sets()}", type=str, nargs="*", default=list(), help="List of dataset to be used as test sets")     #list of test sets 
-        parser.add_argument("-f", f"--{FeatSEECore.ParserParameters.feature_sets()}", type=str, nargs="+", default=list(), help="List of features sets to be considered")       #list of feature lists 
-
-    @classmethod
-    def __set_cmp_parameters(cls, parser: argparse.ArgumentParser):
-        parser.add_argument("-t", "--target", type=str, required=True, help="Name of the categorical feature to be set as target")          #name of the (categorical) feature to be predicted 
-        parser.add_argument("-p", "--pos_labels", type=str, nargs="+", help="Values of the target feature to be considered as positive examples")          #labels to be considered as positive     
-        parser.add_argument("-n", "--neg_labels", type=str, nargs="+", help="Values of the target feature to be considered as negative examples")          #labels to be considered as negative
-
-
-    @classmethod
-    def __set_run_parameters(cls, parser: argparse.ArgumentParser):
-        ###################### 
-        parser.add_argument("--trials", type=int, default=2, help="How many times to repeat the cross-validation procedure")                    #num of runs to be done 
-        parser.add_argument("--ncv", type=int, default=10, help="Number of folds during cross-validation")                      #number of folds to be used during cross validation 
-        parser.add_argument("--tsize", type=float, required=False, default=0, help="Proportion of the input dataset to be used as test set")   #dataset proportion to be used as test set 
-        ######################
-        parser.add_argument("--estimators", type=str, nargs="+", default=["ALL"], help="List of estimator to be used during feature evaluation")          #list of estimators to be used
-
 
 
 class ParserFeatSEE:
     
     @classmethod
-    def get_parser(cls, parser: argparse.ArgumentParser = None) -> argparse.ArgumentParser:
+    def get_parser(cls, parser: argparse.ArgumentParser = None, avail_estimators: List[str] = None) -> argparse.ArgumentParser:
 
         if parser is None:
             parser = argparse.ArgumentParser("FeatSEE: Feature Selection, Evaluation and Explaination")
 
+        subparsers_details = [
+            ( Parser.set_evaluation_parameters, FeatSEECore.SupportedAction.EVALUATION, FeatSEECore.CommandHelper.EVALUATION ), 
+            ( Parser.set_explaination_parameters, FeatSEECore.SupportedAction.EXPLAINATION, FeatSEECore.CommandHelper.EXPLANATION ), 
+            ( Parser.set_fselection_parameters, FeatSEECore.SupportedAction.SELECTION, FeatSEECore.CommandHelper.SELECTION ), 
+            ( Parser.set_ga_parameters, FeatSEECore.SupportedAction.GA_SELECTION, FeatSEECore.CommandHelper.GA_SELECTION ), 
+            ( Parser.set_tuning_parameters, FeatSEECore.SupportedAction.TUNING, FeatSEECore.CommandHelper.TUNING ), 
+            ( None, FeatSEECore.SupportedAction.EDA, FeatSEECore.CommandHelper.EDA )
+        ]
         subparser = parser.add_subparsers(dest="command", title="Commands", description="Valid commands", required=True)
 
-        Parser.set_evaluation_parameters( subparser.add_parser( 
-                FeatSEECore.SupportedAction.EVALUATION.value, 
-                help="Evaluate 1+ sets of features") )
+        for parser_method, operation, helper in subparsers_details:
+            #create a new subparser using the current operation and helper message 
+            curr_parser = subparser.add_parser( operation.value, help = helper.value )
+            # set standard parameters, then customize the parser wrt current operation 
+            Parser.get_standard_parser( curr_parser, avail_estimators )
 
-        Parser.set_explaination_parameters( subparser.add_parser(
-                FeatSEECore.SupportedAction.EXPLAINATION.value, 
-                help="Explain the features of a trained model") )
-
-        Parser.set_fselection_parameters( subparser.add_parser(
-                FeatSEECore.SupportedAction.SELECTION.value,
-                help="Select features from a training set") )
-
-        Parser.set_ga_parameters( subparser.add_parser(
-                FeatSEECore.SupportedAction.GA_SELECTION.value,
-                help="Run a genetic algorithm to perform feature selection") )
-
-        Parser.set_tuning_parameters( subparser.add_parser(
-                FeatSEECore.SupportedAction.TUNING.value,
-                help="Tune the parameters of 1+ model(s)") )
+            if parser_method is not None: 
+                parser_method( curr_parser )
 
         return parser 
 
@@ -501,74 +589,86 @@ class Batcher:
         
         def __format_general_params(self):
             """ Rebuild generic parameters dictionary by setting the proper parameters' names """
-            return dict(
-                #Input data 
-                input_data = self.generics.get( "input_datasets" ), 
-                feature_lists = self.generics.get( "feature_sets" ),
-                test_sets = self.generics.get( "test_sets" ),
-                # Training parameters 
-                trials = self.generics.get( "n_trials" ),
-                ncv = self.generics.get( "n_folds" ),
-                tsize = self.generics.get( "test_size" ), 
-                estimators = self.generics.get( "estimators" )
-            )
+
+            keys = [ 
+                ArgparseParameterNames.INPUT_DATASET, 
+                ArgparseParameterNames.FEATURE_SETS, 
+                ArgparseParameterNames.TEST_SETS, 
+                ArgparseParameterNames.EV_NTRIALS, 
+                ArgparseParameterNames.EV_NCV, 
+                ArgparseParameterNames.TSET_PROPORTION, 
+                ArgparseParameterNames.ESTIMATORS 
+            ]
+
+            return ArgparseParameterNames.replace_keys({
+                k: self.generics.get( k.value ) for k in keys
+            })
+            
 
         def format_params(self, cmp_params: dict):
             def unroll_list( arg ):
-                return " ".join( arg ) if isinstance( arg, list ) else arg 
+                if isinstance( arg, list ):
+                    return " ".join( arg )
+                elif isinstance( arg, bool ):
+                    return ""
+                else:
+                    return arg 
+                    
 
             def unpack_dict( d: dict ):
                 l = [ f"--{k} {unroll_list( v )}" for k, v in d.items() if v ]
                 return " ".join(l)
 
-            general = unpack_dict( self.__format_general_params() )
-            specific = unpack_dict( self.__specific )
-            cmp = unpack_dict( cmp_params )
+            all_args = [ self.__format_general_params(), self.__specific, cmp_params ]
+            general, specific, cmp = [ unpack_dict( curr_args ) for curr_args in all_args ]
 
             return f"{self.__op} {general} {cmp} {specific}"
 
-
+        #### XXX replace args names with enums
         def set_specific(self):
             if self.__op == FeatSEECore.SupportedAction.EVALUATION.value:
-                self.__specific = dict( loo = False )
+                self.__specific = {
+                    ArgparseParameterNames.EV_LOO: False
+                }
 
             elif self.__op == FeatSEECore.SupportedAction.SELECTION.value:
-                self.__specific = dict( 
-                    min_nf = 1,
-                    max_nf = 10, 
-                    min_auc = 0.7, 
-                    score = "pearson", 
-                    ntrials_test = 3, 
-                    ncv_test = 10 )
+                self.__specific = {
+                    ArgparseParameterNames.FS_MIN_NF: 1, 
+                    ArgparseParameterNames.FS_MAX_NF: 10, 
+                    ArgparseParameterNames.FS_MIN_AUC: 0.7, 
+                    ArgparseParameterNames.FS_NTEST_EVAL: 3, 
+                    ArgparseParameterNames.FS_NCV_EVAL: 10 
+                }
             
             elif self.__op == FeatSEECore.SupportedAction.GA_SELECTION.value:
-                self.__specific = dict(
-                    edge_threshold = 0.5,
-                    ngen = 50,
-                    nga = 10,
-                    popsize = 30, 
-                    max_nf = None
-                    # score = "pearson"
-                )
-
+                self.__specific = {
+                    ArgparseParameterNames.GA_EDGE_THRESHOLD: 0.5, 
+                    ArgparseParameterNames.GA_NGEN: 50, 
+                    ArgparseParameterNames.GA_NRUNS: 10, 
+                    ArgparseParameterNames.GA_POPSIZE: 30, 
+                    ArgparseParameterNames.GA_MAX_NF: None
+                }
 
             else:
                 raise NotImplementedError( self.__op ) #Exception("BOH ", self.__op)
 
+            self.__specific = ArgparseParameterNames.replace_keys( self.__specific )
 
         def set_generic(self, datasets: list, features: list, test_sets: list ):
             def get_abs_path( filenames: list ):
                 return [ os.path.abspath( x ) for x in filenames ]
 
-            self.__generic = dict(
-                input_datasets =  get_abs_path( datasets ), 
-                feature_sets = get_abs_path( features ), 
-                test_sets = get_abs_path( test_sets ), 
-                n_trials = 10, 
-                n_folds = 10, 
-                test_size = 0.3, 
-                estimators = "ALL"
-            )
+
+            self.__generic = ArgparseParameterNames.replace_keys({
+                ArgparseParameterNames.INPUT_DATASET: get_abs_path( datasets ),
+                ArgparseParameterNames.FEATURE_SETS: get_abs_path( features ), 
+                ArgparseParameterNames.TEST_SETS: get_abs_path( test_sets ), 
+                ArgparseParameterNames.EV_NTRIALS: 10, 
+                ArgparseParameterNames.EV_NCV: 10, 
+                ArgparseParameterNames.TSET_PROPORTION: 0.3, 
+                ArgparseParameterNames.ESTIMATORS: "ALL"
+            })
+
 
         def to_json(self, filename):
             """ Write the parameters to a JSON file. """
@@ -603,10 +703,14 @@ class Batcher:
 
 
     def init_project(self):
-        outfolder = self.__args.output
-        in_datasets = self.__args.input 
-        f_sets = self.__args.features 
-        t_sets = self.__args.test_sets 
+
+        outfolder, in_datasets, f_sets, t_sets = ArgparseParameterNames.build_list_args(
+            vars( self.__args ), 
+            map( lambda k: k.value, [ 
+                ArgparseParameterNames.OUTPUT_FOLDER, ArgparseParameterNames.INPUT_DATASET, 
+                ArgparseParameterNames.FEATURE_SETS, ArgparseParameterNames.TEST_SETS ] 
+            )
+        )
         op = self.__args.op 
 
         ## build project folder
@@ -686,10 +790,15 @@ class Batcher:
         #### Initialize a new project ####
         parser_init = subparsers.add_parser("init",
             add_help=False, description="Evaluate feature sets using different ML models",  help="...")
-        parser_init.add_argument("-i", "--input", nargs="+", type=str,  required=True, help="Input files")
-        parser_init.add_argument("-o", "--output", type=str, required=True, help="Output directory")
-        parser_init.add_argument("-t", "--test_sets", nargs="*", type=str, default=list(), help="Test sets")
-        parser_init.add_argument("-f", "--features", nargs="*", type=str, default=list(), help="Feature sets")
+        #### XXX REPLACE STRINGS WITH ENUMS 
+        # "--input"
+        parser_init.add_argument("-i",  get_opt( ArgparseParameterNames.INPUT_DATASET ), nargs="+", type=str,  required=True, help="Input files")
+        # "--output"
+        parser_init.add_argument("-o", get_opt( ArgparseParameterNames.OUTPUT_FOLDER ), type=str, required=True, help="Output directory")
+        # "--test_sets", 
+        parser_init.add_argument("-t", get_opt( ArgparseParameterNames.TEST_SETS ), nargs="*", type=str, default=list(), help="Test sets")
+        # "--features"
+        parser_init.add_argument("-f", get_opt( ArgparseParameterNames.FEATURE_SETS ), nargs="*", type=str, default=list(), help="Feature sets")
         parser_init.add_argument("--op", choices=avail_operations, default=FeatSEECore.SupportedAction.EVALUATION.value, help="Operation to perform")
         
         #### Run analyses in a project ####
