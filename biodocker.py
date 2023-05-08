@@ -42,6 +42,7 @@ class ArgparseParameterNames( enum.Enum ):
     EX_NCV_EVAL = FS_NCV_EVAL
     EX_LOO = EV_LOO
     # GENETIC SELECTION
+    GA_ENABLE_SELECTION = "enable_ga"
     GA_EDGE_THRESHOLD = "edge_threshold"
     GA_NRUNS = "nga"
     GA_NGEN = "ngen"
@@ -99,13 +100,16 @@ class Parser:
     @classmethod
     def set_explaination_parameters(cls, parser: argparse.ArgumentParser):
         # cls.get_standard_parser( parser )
-        parser.add_argument("-r", get_opt( ArgparseParameterNames.EX_RULES_FILES ), type=str, nargs="*")
+        parser.add_argument("-r", get_opt( ArgparseParameterNames.EX_RULES_FILES ), type=str, nargs="*", default=list())
         parser.add_argument("-c", get_opt( ArgparseParameterNames.EX_NCLUSTERS ), type=int, default=3)
         parser.add_argument( get_opt( ArgparseParameterNames.EX_NTEST_EVAL ), type=int, default=3)
         parser.add_argument( get_opt( ArgparseParameterNames.EX_NCV_EVAL ), type=int, default=10)
-        parser.add_argument( get_opt( ArgparseParameterNames.EX_LOO ), action="store_true")
+        # parser.add_argument( get_opt( ArgparseParameterNames.EX_LOO ), action="store_true")
         parser.add_argument( get_opt( ArgparseParameterNames.EX_MAX_NRULES ), type=int, required=False, default=20)
         parser.add_argument( get_opt( ArgparseParameterNames.EX_MIN_NRULES ), type=int, required=False, default=2)
+
+        parser.add_argument( get_opt( ArgparseParameterNames.GA_ENABLE_SELECTION ), action="store_true" )
+        cls.set_ga_parameters( parser )
         
 
     @classmethod
@@ -116,8 +120,7 @@ class Parser:
         parser.add_argument( get_opt( ArgparseParameterNames.GA_NGEN ), type=int, default=1000, help="Number of generations for a genetic algorithm run")
         parser.add_argument( get_opt( ArgparseParameterNames.GA_POPSIZE ), type=int, default=100, help="Population size for a genetic algorithm run")
         parser.add_argument( get_opt( ArgparseParameterNames.EV_LOO ), action="store_true")
-        # parser.add_argument("--score", type=str, default="pearson", help="Score to be used for feature selection (e.g. pearson, anova)")
-        parser.add_argument( get_opt( ArgparseParameterNames.GA_MAX_NF ), type=int, help="Maximum number of features to be selected")
+        parser.add_argument( get_opt( ArgparseParameterNames.GA_MAX_NF ), type=int, default=13, help="Maximum number of features to be selected")
 
 
     
@@ -140,7 +143,7 @@ class Parser:
         ### Output folders
         parser.add_argument("-o", f"--{FeatSEECore.ParserParameters.output_folder()}", type=str, required=True, help="The output folder (may not exist)")       #output folder (may not exist)
         ### Input files
-        parser.add_argument("-i", f"--{FeatSEECore.ParserParameters.input_dataset()}", type=str, nargs="+", help="Input dataset to be used as training (and test) set")      #input dataset 
+        parser.add_argument("-i", f"--{FeatSEECore.ParserParameters.input_dataset()}", type=str, nargs="+", help="Input dataset to be used as training (and test) set", required=True)      #input dataset 
         parser.add_argument("-v", f"--{FeatSEECore.ParserParameters.test_sets()}", type=str, nargs="*", default=list(), help="List of dataset to be used as test sets")     #list of test sets 
         parser.add_argument("-f", f"--{FeatSEECore.ParserParameters.feature_sets()}", type=str, nargs="+", default=list(), help="List of features sets to be considered")       #list of feature lists 
 
