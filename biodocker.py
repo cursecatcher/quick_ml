@@ -31,8 +31,8 @@ class ArgparseParameterNames( enum.Enum ):
     FS_MIN_NF = "min_nf"
     FS_MAX_NF = "max_nf"
     FS_MIN_AUC = "min_auc"
-    FS_NTEST_EVAL = "ntrials_test"
-    FS_NCV_EVAL = "ncv_test"
+    FS_NTEST_EVAL = "fs_ntrials"
+    FS_NCV_EVAL = "fs_ncv"
     # EXPLANATION 
     EX_RULES_FILES = "rules"
     EX_NCLUSTERS = "clusters"
