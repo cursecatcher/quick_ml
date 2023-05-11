@@ -96,6 +96,8 @@ class Parser:
         parser.add_argument( get_opt( ArgparseParameterNames.FS_NTEST_EVAL ), type=int, default=3, help="Number of trials during feature evaluation phase")
         parser.add_argument( get_opt( ArgparseParameterNames.FS_NCV_EVAL ), type=int, default=10, help="Number of cross-validation folds during feature evaluation phase")
 
+        cls.set_evaluation_parameters( parser )
+
 
     @classmethod
     def set_explaination_parameters(cls, parser: argparse.ArgumentParser):
@@ -860,7 +862,6 @@ if __name__ == "__main__":
     
     elif args.mode == MainCommand.BATCH.value:
         batcher = Batcher(args)
-
 
         if args.command == "init":
             batcher.init_project()
