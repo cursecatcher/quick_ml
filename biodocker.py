@@ -430,7 +430,7 @@ class FeatSEECore:
         ### COMMAND TEMPLATE: 
         # docker run [OPTIONS] -v <volumes...> IMAGE:TAG COMMAND ARGS... 
         command = f"""
-            docker run -d {set_container_name} --cidfile {self.cidfile}  -u {get_id}:{get_id}
+            docker run -d {set_container_name} --shm-size=5gb --cidfile {self.cidfile}  -u {get_id}:{get_id}
                -v {self.__docker_outfolder}:/data/out -v {self.__docker_outfolder}/in:/data/in
                 {self.DOCKER_IMAGE}:{self.__image_tag} featsee.py {self.__args.command} 
                     -o /data/out {argumentz}"""
