@@ -31,8 +31,8 @@ class ArgparseParameterNames( enum.Enum ):
     FS_MIN_NF = "min_nf"
     FS_MAX_NF = "max_nf"
     FS_MIN_AUC = "min_auc"
-    FS_NTEST_EVAL = "fs_ntrials"
-    FS_NCV_EVAL = "fs_ncv"
+    FS_NTEST_EVAL = "ntrials_test"
+    FS_NCV_EVAL = "ncv_test"
     # EXPLANATION 
     EX_RULES_FILES = "rules"
     EX_NCLUSTERS = "clusters"
@@ -48,6 +48,10 @@ class ArgparseParameterNames( enum.Enum ):
     GA_NGEN = "ngen"
     GA_POPSIZE = "popsize"
     GA_MAX_NF = FS_MAX_NF
+    # PLOT CORRELATION GRAPHS 
+    PG_SUBGRAPH_ONLY = "subgraph_only"
+
+
     # TUNING
     TU_TRAINED_MODELS = TRAINED_MODELS
     TU_EXHAUSTIVE_SEARCH = "exhaustive"
@@ -96,8 +100,6 @@ class Parser:
         parser.add_argument( get_opt( ArgparseParameterNames.FS_NTEST_EVAL ), type=int, default=3, help="Number of trials during feature evaluation phase")
         parser.add_argument( get_opt( ArgparseParameterNames.FS_NCV_EVAL ), type=int, default=10, help="Number of cross-validation folds during feature evaluation phase")
 
-        cls.set_evaluation_parameters( parser )
-
 
     @classmethod
     def set_explaination_parameters(cls, parser: argparse.ArgumentParser):
@@ -132,6 +134,10 @@ class Parser:
         parser.add_argument( get_opt( ArgparseParameterNames.TU_TRAINED_MODELS ), type=str, required=False)
         parser.add_argument( get_opt( ArgparseParameterNames.TU_EXHAUSTIVE_SEARCH ), action="store_true", help="Exhaustive search for hyperparameters")
     
+
+    @classmethod
+    def set_plotgraphs_parameters(cls, parser: argparse.ArgumentParser ):
+        parser.add_argument( get_opt( ArgparseParameterNames.PG_SUBGRAPH_ONLY ), action="store_true" )
 
 
     @classmethod
@@ -281,6 +287,7 @@ class FeatSEECore:
         GA_SELECTION = "Run a genetic algorithm to perform feature selection"
         TUNING = "Tune the parameters of 1+ model(s)"
         EDA = "Perform exploratory data analysis on the provided dataset"
+        PLOT_GRAPHS = "Show feature correlation graphs"
 
 
     class SupportedAction(enum.Enum):
@@ -290,6 +297,7 @@ class FeatSEECore:
         GA_SELECTION = "GA" 
         TUNING = "tune"     
         EDA = "EDA"
+        PLOT_GRAPHS = "plots"
 
         @classmethod
         def from_command(cls, command: str):
@@ -430,7 +438,7 @@ class FeatSEECore:
         ### COMMAND TEMPLATE: 
         # docker run [OPTIONS] -v <volumes...> IMAGE:TAG COMMAND ARGS... 
         command = f"""
-            docker run -d {set_container_name} --shm-size=5gb --cidfile {self.cidfile}  -u {get_id}:{get_id}
+            docker run -d {set_container_name} --cidfile {self.cidfile}  -u {get_id}:{get_id}
                -v {self.__docker_outfolder}:/data/out -v {self.__docker_outfolder}/in:/data/in
                 {self.DOCKER_IMAGE}:{self.__image_tag} featsee.py {self.__args.command} 
                     -o /data/out {argumentz}"""
@@ -482,7 +490,8 @@ class ParserFeatSEE:
             ( Parser.set_fselection_parameters, FeatSEECore.SupportedAction.SELECTION, FeatSEECore.CommandHelper.SELECTION ), 
             ( Parser.set_ga_parameters, FeatSEECore.SupportedAction.GA_SELECTION, FeatSEECore.CommandHelper.GA_SELECTION ), 
             ( Parser.set_tuning_parameters, FeatSEECore.SupportedAction.TUNING, FeatSEECore.CommandHelper.TUNING ), 
-            ( None, FeatSEECore.SupportedAction.EDA, FeatSEECore.CommandHelper.EDA )
+            ( None, FeatSEECore.SupportedAction.EDA, FeatSEECore.CommandHelper.EDA ),
+            ( Parser.set_plotgraphs_parameters, FeatSEECore.SupportedAction.PLOT_GRAPHS, FeatSEECore.CommandHelper.PLOT_GRAPHS ),
         ]
         subparser = parser.add_subparsers(dest="command", title="Commands", description="Valid commands", required=True)
 
