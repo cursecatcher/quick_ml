@@ -51,6 +51,9 @@ class ArgparseParameterNames( enum.Enum ):
     # PLOT CORRELATION GRAPHS 
     PG_SUBGRAPH_ONLY = "subgraph_only"
 
+    GRAPH_VW_SCORES = "vws"
+    GRAPH_EW_SCORE = "ew"
+
 
     # TUNING
     TU_TRAINED_MODELS = TRAINED_MODELS
@@ -74,6 +77,38 @@ class ArgparseParameterNames( enum.Enum ):
     def replace_keys(cls, d: Dict) -> Dict:
         return { k.value: v for k, v in d.items() }
 
+
+
+class SupportedScores( enum.Enum ):
+    ANOVA = "anova"
+    PEARSON_R = "pearson"
+    MUTUAL_INFO = "MI"
+    MCC = "mcc"
+    T_TEST = "t_test"
+    LOGISTIC = "logistic"
+    POINT_BISERIAL = "pbc"
+    # CHI_SQUARED = "chi2"
+
+
+    @classmethod
+    def get_scores(cls, selected_scores: Iterable[str]):
+        """ ... 
+        """
+        the_map = { sc.value: sc for sc in cls }
+        obtained = { name: the_map.get( name ) for name in selected_scores }
+        if all( obtained.values() ):
+            return list( obtained.values() )
+        else:
+            unknown = [ name for name, instance in obtained.items() if not instance ]
+            print(f"Unrecognized scores: {unknown}")
+            return list( filter( lambda item: item, obtained.values() ) )
+
+
+
+
+class SupportedEdgeScorer( enum.Enum ):
+    SPEARMAN_R = "spearman"
+    PEARSON_R = SupportedScores.PEARSON_R.value
 
 
 
@@ -100,6 +135,8 @@ class Parser:
         parser.add_argument( get_opt( ArgparseParameterNames.FS_NTEST_EVAL ), type=int, default=3, help="Number of trials during feature evaluation phase")
         parser.add_argument( get_opt( ArgparseParameterNames.FS_NCV_EVAL ), type=int, default=10, help="Number of cross-validation folds during feature evaluation phase")
 
+        cls.set_evaluation_parameters( parser )
+
 
     @classmethod
     def set_explaination_parameters(cls, parser: argparse.ArgumentParser):
@@ -119,7 +156,7 @@ class Parser:
     @classmethod
     def set_ga_parameters(cls, parser: argparse.ArgumentParser):
         # cls.get_standard_parser( parser )
-        parser.add_argument( get_opt( ArgparseParameterNames.GA_EDGE_THRESHOLD ), type=float, default=0.5, help="Correlation threshold value for creating ad edge in the graph ")
+        # parser.add_argument( get_opt( ArgparseParameterNames.GA_EDGE_THRESHOLD ), type=float, default=0.5, help="Correlation threshold value for creating ad edge in the graph ")
         parser.add_argument( get_opt( ArgparseParameterNames.GA_NRUNS ), type=int, default=10, help="Number of genetic algorithms to be run")
         parser.add_argument( get_opt( ArgparseParameterNames.GA_NGEN ), type=int, default=1000, help="Number of generations for a genetic algorithm run")
         parser.add_argument( get_opt( ArgparseParameterNames.GA_POPSIZE ), type=int, default=100, help="Population size for a genetic algorithm run")
@@ -145,6 +182,13 @@ class Parser:
         cls.__set_io_parameters( parser ) 
         cls.__set_cmp_parameters( parser )
         cls.__set_run_parameters( parser, estimators )
+        cls.__set_graph_parameters( parser )
+
+    @classmethod
+    def __set_graph_parameters(cls, parser: argparse.ArgumentParser):
+        parser.add_argument( get_opt( ArgparseParameterNames.GA_EDGE_THRESHOLD ), type=float, default=0.05, help="P-value threshold to build an edge between two features") 
+        parser.add_argument( get_opt( ArgparseParameterNames.GRAPH_VW_SCORES ), type=str, nargs="+", default=[ SupportedScores.T_TEST.value ], help=f"List of score functions to be used to set vertices weights; available: {[ x.value for x in SupportedScores ]}")
+        parser.add_argument( get_opt( ArgparseParameterNames.GRAPH_EW_SCORE ), type=str, default=SupportedEdgeScorer.PEARSON_R.value, help=f"Score function to be used to create edges: {[ x.value for x in SupportedEdgeScorer ]}")
 
     @classmethod
     def __set_io_parameters(cls, parser: argparse.ArgumentParser):
@@ -438,7 +482,7 @@ class FeatSEECore:
         ### COMMAND TEMPLATE: 
         # docker run [OPTIONS] -v <volumes...> IMAGE:TAG COMMAND ARGS... 
         command = f"""
-            docker run -d {set_container_name} --shm-size=5gb  --cidfile {self.cidfile}  -u {get_id}:{get_id}
+            docker run -d {set_container_name} --shm-size=5gb --cidfile {self.cidfile}  -u {get_id}:{get_id}
                -v {self.__docker_outfolder}:/data/out -v {self.__docker_outfolder}/in:/data/in
                 {self.DOCKER_IMAGE}:{self.__image_tag} featsee.py {self.__args.command} 
                     -o /data/out {argumentz}"""
