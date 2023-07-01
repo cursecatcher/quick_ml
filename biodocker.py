@@ -22,6 +22,8 @@ class ArgparseParameterNames( enum.Enum ):
     TARGET_FEATURE = "target"
     TARGET_POS_LABELS = "pos_labels"
     TARGET_NEG_LABELS = "neg_labels"
+
+    NUM_PROCESSES = "np"
     
     # EVALUATION
     EV_LOO = "loo"
@@ -209,6 +211,7 @@ class Parser:
     @classmethod
     def __set_run_parameters(cls, parser: argparse.ArgumentParser, estimators: List[str] = None):
         ###################### 
+        parser.add_argument( get_opt( ArgparseParameterNames.NUM_PROCESSES ), type=int, default=4, help="Number of processes to be used during cross-validation procedure")
         parser.add_argument( get_opt( ArgparseParameterNames.EV_NTRIALS ), type=int, default=2, help="How many times to repeat the cross-validation procedure")                    #num of runs to be done 
         parser.add_argument( get_opt( ArgparseParameterNames.EV_NCV ), type=int, default=10, help="Number of folds during cross-validation")                      #number of folds to be used during cross validation 
         parser.add_argument( get_opt( ArgparseParameterNames.TSET_PROPORTION ), type=float, required=False, default=0, help="Proportion of the input dataset to be used as test set")   #dataset proportion to be used as test set 
