@@ -50,6 +50,7 @@ class ArgparseParameterNames( enum.Enum ):
     GA_NGEN = "ngen"
     GA_POPSIZE = "popsize"
     GA_MAX_NF = FS_MAX_NF
+    GA_DISABLE_EVAL = "no_eval"
     # PLOT CORRELATION GRAPHS 
     PG_SUBGRAPH_ONLY = "subgraph_only"
 
@@ -164,6 +165,8 @@ class Parser:
         parser.add_argument( get_opt( ArgparseParameterNames.GA_POPSIZE ), type=int, default=100, help="Population size for a genetic algorithm run")
         parser.add_argument( get_opt( ArgparseParameterNames.EV_LOO ), action="store_true")
         parser.add_argument( get_opt( ArgparseParameterNames.GA_MAX_NF ), type=int, default=13, help="Maximum number of features to be selected")
+
+        parser.add_argument( get_opt( ArgparseParameterNames.GA_DISABLE_EVAL ), action="store_true", help="Disable feature evaluation after feature selection by GA" )
 
 
     
