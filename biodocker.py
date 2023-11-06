@@ -24,7 +24,8 @@ class ArgparseParameterNames( enum.Enum ):
     TARGET_NEG_LABELS = "neg_labels"
 
     NUM_PROCESSES = "np"
-    
+    VERBOSENESS = "verbose"
+
     # EVALUATION
     EV_LOO = "loo"
     EV_NCV = "ncv"
@@ -35,6 +36,7 @@ class ArgparseParameterNames( enum.Enum ):
     FS_MIN_AUC = "min_auc"
     FS_NTEST_EVAL = "fs_ntrials"
     FS_NCV_EVAL = "fs_ncv"
+    FS_MIN_SUPPORT = "min_supp"
     # EXPLANATION 
     EX_RULES_FILES = "rules"
     EX_NCLUSTERS = "clusters"
@@ -51,14 +53,17 @@ class ArgparseParameterNames( enum.Enum ):
     GA_POPSIZE = "popsize"
     GA_MAX_NF = FS_MAX_NF
     FLAG_DISABLE_EVAL = "no_eval"
+    GA_MATING_POOL_SIZE = "mating_pool"
+    GA_ELITISM_PROPORTION = "elitism"
 
-    GA_PROB_MUTATION = "mprob"
-    GA_PROB_CROSSOVER = "cprob"
+    GA_PROB_MUTATION = "m_rate"
+    GA_PROB_CROSSOVER = "c_rate"
     # PLOT CORRELATION GRAPHS 
     PG_SUBGRAPH_ONLY = "subgraph_only"
 
     GRAPH_VW_SCORES = "vws"
     GRAPH_EW_SCORE = "ew"
+    GRAPH_FILE = "graph"
 
 
     # TUNING
@@ -137,7 +142,10 @@ class Parser:
         parser.add_argument( get_opt( ArgparseParameterNames.FS_MIN_NF ), type=int, default=1, help="Minimum number of features to be selected")
         parser.add_argument( get_opt( ArgparseParameterNames.FS_MAX_NF ), type=int, help="Maximum number of features to be selected")
         parser.add_argument( get_opt( ArgparseParameterNames.FS_MIN_AUC ), type=float, required=False, default=0.8, help="Minimum AUC to be considered")
+        parser.add_argument( get_opt( ArgparseParameterNames.FS_MIN_SUPPORT ), type=int, required=False, default=1, help="Minimum support for a feature set to be considered for evaluation")
         
+
+
         parser.add_argument( get_opt( ArgparseParameterNames.FS_NTEST_EVAL ), type=int, default=3, help="Number of trials during feature evaluation phase")
         parser.add_argument( get_opt( ArgparseParameterNames.FS_NCV_EVAL ), type=int, default=10, help="Number of cross-validation folds during feature evaluation phase")
 
@@ -169,9 +177,11 @@ class Parser:
         parser.add_argument( get_opt( ArgparseParameterNames.EV_LOO ), action="store_true")
         parser.add_argument( get_opt( ArgparseParameterNames.GA_MAX_NF ), type=int, default=13, help="Maximum number of features to be selected")
         parser.add_argument( get_opt( ArgparseParameterNames.FLAG_DISABLE_EVAL ), action="store_true", help="Disable feature evaluation after feature selection by GA" )
+        parser.add_argument( get_opt( ArgparseParameterNames.GA_MATING_POOL_SIZE ), type=float, default=0.95, help="Fraction of the population to be selected to form the mating pool" )
+        parser.add_argument( get_opt( ArgparseParameterNames.GA_ELITISM_PROPORTION ), type=float, default=0, help="Elitism - Proportion of the population to be preserved from one generation to the next one")
 
         parser.add_argument( get_opt( ArgparseParameterNames.GA_PROB_CROSSOVER), type=float, default=0.6, help="Crossover probability" )
-        parser.add_argument( get_opt( ArgparseParameterNames.GA_PROB_MUTATION), type=float, default=0.02, help="Crossover probability" )
+        parser.add_argument( get_opt( ArgparseParameterNames.GA_PROB_MUTATION), type=float, default=0.02, help="Mutation probability" )
         
     
     @classmethod
@@ -183,6 +193,7 @@ class Parser:
 
     @classmethod
     def set_plotgraphs_parameters(cls, parser: argparse.ArgumentParser ):
+
         parser.add_argument( get_opt( ArgparseParameterNames.PG_SUBGRAPH_ONLY ), action="store_true" )
 
 
@@ -193,8 +204,12 @@ class Parser:
         cls.__set_run_parameters( parser, estimators )
         cls.__set_graph_parameters( parser )
 
+        parser.add_argument( get_opt( ArgparseParameterNames.VERBOSENESS ), action="store_true" )
+
     @classmethod
     def __set_graph_parameters(cls, parser: argparse.ArgumentParser):
+        parser.add_argument( get_opt( ArgparseParameterNames.GRAPH_FILE ), type=str, required=False )
+
         parser.add_argument( get_opt( ArgparseParameterNames.GA_EDGE_THRESHOLD ), type=float, default=0.05, help="P-value threshold to build an edge between two features") 
         parser.add_argument( get_opt( ArgparseParameterNames.GRAPH_VW_SCORES ), type=str, nargs="+", default=[ SupportedScores.T_TEST.value ], help=f"List of score functions to be used to set vertices weights; available: {[ x.value for x in SupportedScores ]}")
         parser.add_argument( get_opt( ArgparseParameterNames.GRAPH_EW_SCORE ), type=str, default=SupportedEdgeScorer.PEARSON_R.value, help=f"Score function to be used to create edges: {[ x.value for x in SupportedEdgeScorer ]}")
@@ -282,10 +297,11 @@ class InputGroup:
         self.files = list() 
     
     def add(self, new_elems: Iterable[str]):
-        if isinstance(new_elems, str):
-            self.files.append( InputItem( new_elems ) )
-        else:
-            self.files.extend([ InputItem( f ) for f in new_elems ])
+        if new_elems is not None:
+            if isinstance(new_elems, str):
+                self.files.append( InputItem( new_elems ) )
+            else:
+                self.files.extend([ InputItem( f ) for f in new_elems ])
             
     def check_input(self) -> List:
         """ Check files for existence: return a list containing 
@@ -333,6 +349,10 @@ class FeatSEECore:
             return ArgparseParameterNames.TRAINED_MODELS.value
             # return "trained_models"
 
+        @classmethod
+        def feature_graph(cls):
+            return ArgparseParameterNames.GRAPH_FILE.value
+
 
     class CommandHelper( enum.Enum ):
         EVALUATION = "Evaluate 1+ sets of features"
@@ -372,7 +392,8 @@ class FeatSEECore:
         ParserParameters.test_sets(), 
         ParserParameters.feature_sets(), 
         ParserParameters.rules_sets(), 
-        ParserParameters.trained_models()
+        ParserParameters.trained_models(), 
+        ParserParameters.feature_graph()
     )
 
 
@@ -385,6 +406,9 @@ class FeatSEECore:
         self.__features = InputGroup( self.ParserParameters.feature_sets() )        #features sets
         self.__rules = InputGroup( self.ParserParameters.rules_sets() )              #rules sets
         self.__models = InputGroup( self.ParserParameters.trained_models() )         #fitted models
+        ## pre-computed feature graph (if provided)
+        self.__featuregraph = InputGroup( self.ParserParameters.feature_graph() )   #pre-computed feature graph 
+
 
         self.__docker_outfolder = os.path.abspath( self.__args.outfolder )
         self.__docker_mountdata = "/data"
@@ -398,7 +422,8 @@ class FeatSEECore:
             self.__rules,
             self.__training_data, 
             self.__test_sets, 
-            self.__models
+            self.__models, 
+            self.__featuregraph
         ]
 
 
@@ -433,6 +458,8 @@ class FeatSEECore:
 
         self.__test_sets.add( self.__args.test_sets )
         self.__features.add( self.__args.feature_lists )
+
+        self.__featuregraph.add( self.__args.graph  )
 
         if self.__to_do is self.SupportedAction.EXPLAINATION:
             self.__rules.add( self.__args.rules )
@@ -492,7 +519,7 @@ class FeatSEECore:
         ### COMMAND TEMPLATE: 
         # docker run [OPTIONS] -v <volumes...> IMAGE:TAG COMMAND ARGS... 
         command = f"""
-            docker run -d {set_container_name} --shm-size=5gb --cidfile {self.cidfile}  -u {get_id}:{get_id}
+            docker run -t -d {set_container_name} --shm-size=13gb --cidfile {self.cidfile}  -u {get_id}:{get_id}
                -v {self.__docker_outfolder}:/data/out -v {self.__docker_outfolder}/in:/data/in
                 {self.DOCKER_IMAGE}:{self.__image_tag} featsee.py {self.__args.command} 
                     -o /data/out {argumentz}"""
